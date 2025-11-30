@@ -31,10 +31,10 @@ CREATE TABLE emprendimientos (
 CREATE TABLE clientes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_emprendimiento INT NOT NULL,
-    dni VARCHAR(20), -- Cambiado de dni_o_nit a dni para coincidir con Java
+    dni VARCHAR(20),
     nombre VARCHAR(100) NOT NULL,
     apellido VARCHAR(100),
-    numero_telefono VARCHAR(20), -- Cambiado de telefono a numero_telefono para consistencia
+    numero_telefono VARCHAR(20),
     direccion VARCHAR(255),
     email VARCHAR(100),
     calificacion INT DEFAULT 5,
@@ -60,11 +60,12 @@ CREATE TABLE pedidos (
     id_emprendimiento INT NOT NULL,
     id_cliente INT NOT NULL,
     fecha_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,
-    estado VARCHAR(50) DEFAULT 'PENDIENTE', -- Cambiado ENUM a VARCHAR para evitar errores de mapeo string
+    estado VARCHAR(50) DEFAULT 'PENDIENTE',
     total DECIMAL(10, 2) DEFAULT 0.00,
     observaciones TEXT,
-    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id),
-    FOREIGN KEY (id_cliente) REFERENCES clientes(id)
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id) ON DELETE CASCADE,
+    -- CAMBIO IMPORTANTE: Si borras un cliente, se borran sus pedidos
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE CASCADE 
 );
 
 -- 6. ITEMS PEDIDO
@@ -75,7 +76,8 @@ CREATE TABLE items_pedido (
     cantidad INT NOT NULL,
     precio_unitario DECIMAL(10, 2) NOT NULL,
     FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
-    FOREIGN KEY (producto_id) REFERENCES productos(id)
+    -- CAMBIO IMPORTANTE: Si borras un producto, se borra de los items de pedido
+    FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE 
 );
 
 -- 7. VENTAS

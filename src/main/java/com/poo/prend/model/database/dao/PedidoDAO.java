@@ -17,12 +17,11 @@ public class PedidoDAO {
         String sqlItems = "INSERT INTO items_pedido (pedido_id, producto_id, cantidad, precio_unitario) VALUES (?, ?, ?, ?)";
         
         Connection conn = null;
-        
         try {
             conn = ConnectionDB.getConnection();
-            conn.setAutoCommit(false); // Iniciar transacción
+            conn.setAutoCommit(false); 
 
-            // 1. Insertar el Pedido Cabecera
+            // 1. Cabecera
             int pedidoId = 0;
             try (PreparedStatement ps = conn.prepareStatement(sqlPedido, Statement.RETURN_GENERATED_KEYS)) {
                 ps.setInt(1, emprendimientoId);
@@ -30,7 +29,6 @@ public class PedidoDAO {
                 ps.setTimestamp(3, new Timestamp(pedido.getFechaPedido().getTime()));
                 ps.setString(4, pedido.getEstado().toString());
                 
-                // Calcular total para guardar en el registro
                 double total = 0;
                 if (pedido.getItems() != null) {
                     total = pedido.getItems().stream()
@@ -38,7 +36,6 @@ public class PedidoDAO {
                             .sum();
                 }
                 ps.setDouble(5, total);
-                
                 ps.executeUpdate();
 
                 try (ResultSet rs = ps.getGeneratedKeys()) {
@@ -49,7 +46,7 @@ public class PedidoDAO {
                 }
             }
 
-            // 2. Insertar los Items del Pedido
+            // 2. Items
             if (pedido.getItems() != null && !pedido.getItems().isEmpty()) {
                 try (PreparedStatement psItem = conn.prepareStatement(sqlItems)) {
                     for (ItemPedido item : pedido.getItems()) {
@@ -57,67 +54,63 @@ public class PedidoDAO {
                         psItem.setInt(2, item.getProducto().getId());
                         psItem.setInt(3, item.getCantidad());
                         psItem.setDouble(4, item.getPrecioUnitario());
-                        psItem.addBatch(); // Añadir al lote
+                        psItem.addBatch();
                     }
-                    psItem.executeBatch(); // Ejecutar lote
+                    psItem.executeBatch();
                 }
             }
-
-            conn.commit(); // Confirmar cambios
-
+            conn.commit(); 
         } catch (SQLException e) {
-            if (conn != null) {
-                try {
-                    conn.rollback(); // Revertir si hay error
-                } catch (SQLException ex) {
-                    ex.printStackTrace();
-                }
-            }
+            if (conn != null) conn.rollback();
             throw e;
         } finally {
-            if (conn != null) {
-                conn.setAutoCommit(true); // Restaurar estado
-            }
+            if (conn != null) conn.setAutoCommit(true);
         }
     }
 
     public List<Pedido> listarPedidos(int emprendimientoId) throws SQLException {
-        List<Pedido> pedidos = new ArrayList<>();
-        // Se une con clientes para obtener nombre y con items para calcular total si es necesario
+        // Devuelve TODOS los pedidos (útil para cálculos generales)
+        return listarPedidosQuery("SELECT p.id, p.fecha_pedido, p.estado, p.total, c.id as cliente_id, c.nombre, c.apellido, c.dni " +
+                                  "FROM pedidos p JOIN clientes c ON p.id_cliente = c.id " +
+                                  "WHERE p.id_emprendimiento = ? ORDER BY p.fecha_pedido DESC", emprendimientoId);
+    }
+    
+    // Método para filtrar por estado (PENDIENTE vs ENTREGADO/COMPLETADO)
+    public List<Pedido> listarPedidosPorEstado(int emprendimientoId, String estadoExcluido) throws SQLException {
         String sql = "SELECT p.id, p.fecha_pedido, p.estado, p.total, c.id as cliente_id, c.nombre, c.apellido, c.dni " +
-                     "FROM pedidos p " +
-                     "JOIN clientes c ON p.id_cliente = c.id " +
-                     "WHERE p.id_emprendimiento = ? ORDER BY p.fecha_pedido DESC";
+                     "FROM pedidos p JOIN clientes c ON p.id_cliente = c.id " +
+                     "WHERE p.id_emprendimiento = ? AND p.estado != ? ORDER BY p.fecha_pedido DESC";
+         // Lógica inversa: Si paso 'ENTREGADO', traigo los PENDIENTES, etc.
+         // Para simplificar, haremos filtrado en Java o consultas específicas si es necesario.
+         // Usemos el método genérico y filtremos en controller para flexibilidad.
+         return listarPedidos(emprendimientoId);
+    }
 
+    private List<Pedido> listarPedidosQuery(String sql, int emprendimientoId) throws SQLException {
+        List<Pedido> pedidos = new ArrayList<>();
         try (Connection conn = ConnectionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            
             ps.setInt(1, emprendimientoId);
             ResultSet rs = ps.executeQuery();
-
             while (rs.next()) {
                 Pedido p = new Pedido();
                 p.setId(rs.getInt("id"));
                 p.setFechaPedido(rs.getTimestamp("fecha_pedido"));
-                
-                // Manejo seguro del Enum
                 try {
                     p.setEstado(Estado.valueOf(rs.getString("estado").toUpperCase()));
-                } catch (IllegalArgumentException e) {
-                    p.setEstado(Estado.PENDIENTE); // Valor por defecto si falla
+                } catch (Exception e) {
+                    p.setEstado(Estado.PENDIENTE);
                 }
                 
-                // Reconstruir Cliente
                 Cliente c = new Cliente();
                 c.setId(rs.getInt("cliente_id"));
                 c.setNombre(rs.getString("nombre"));
-                c.setApellido(rs.getString("apellido")); // Si existe en query
+                c.setApellido(rs.getString("apellido"));
                 c.setDNI(rs.getString("dni"));
                 p.setCliente(c);
                 
-                // Cargar Items del pedido (necesario para ver detalles)
+                // Cargar Items
                 p.setItems(listarItemsPorPedido(p.getId(), conn));
-
                 pedidos.add(p);
             }
         }
@@ -126,37 +119,25 @@ public class PedidoDAO {
 
     private List<ItemPedido> listarItemsPorPedido(int pedidoId, Connection conn) throws SQLException {
         List<ItemPedido> items = new ArrayList<>();
-        // JOIN con productos para obtener los datos necesarios para el objeto Producto
         String sql = "SELECT i.id, i.cantidad, i.precio_unitario, p.id as prod_id, p.nombre, p.precio, p.stock " +
-                     "FROM items_pedido i " +
-                     "JOIN productos p ON i.producto_id = p.id " +
-                     "WHERE i.pedido_id = ?";
-                     
+                     "FROM items_pedido i JOIN productos p ON i.producto_id = p.id WHERE i.pedido_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, pedidoId);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                // Reconstruir el objeto Producto
                 Producto prod = new Producto();
                 prod.setId(rs.getInt("prod_id"));
                 prod.setNombre(rs.getString("nombre"));
                 prod.setPrecio(rs.getDouble("precio"));
                 prod.setStock(rs.getInt("stock"));
 
-                // Crear el ItemPedido usando tu constructor: (id, producto, cantidad, precioUnitario)
-                ItemPedido item = new ItemPedido(
-                    rs.getInt("id"),
-                    prod,
-                    rs.getInt("cantidad"),
-                    rs.getDouble("precio_unitario")
-                );
+                ItemPedido item = new ItemPedido(rs.getInt("id"), prod, rs.getInt("cantidad"), rs.getDouble("precio_unitario"));
                 items.add(item);
             }
         }
         return items;
     }
-    
-    // Método auxiliar para cambiar estado de un pedido
+
     public void actualizarEstado(int pedidoId, Estado nuevoEstado) throws SQLException {
         String sql = "UPDATE pedidos SET estado = ? WHERE id = ?";
         try (Connection conn = ConnectionDB.getConnection();
@@ -164,6 +145,29 @@ public class PedidoDAO {
             ps.setString(1, nuevoEstado.toString());
             ps.setInt(2, pedidoId);
             ps.executeUpdate();
+        }
+    }
+    
+    public void eliminarPedido(int idPedido) throws SQLException {
+        String sqlItems = "DELETE FROM items_pedido WHERE pedido_id = ?";
+        String sqlVentas = "DELETE FROM ventas WHERE pedido_id = ?";
+        String sqlPedido = "DELETE FROM pedidos WHERE id = ?";
+
+        try (Connection conn = ConnectionDB.getConnection()) {
+            conn.setAutoCommit(false);
+            try (PreparedStatement ps1 = conn.prepareStatement(sqlItems);
+                 PreparedStatement ps2 = conn.prepareStatement(sqlVentas);
+                 PreparedStatement ps3 = conn.prepareStatement(sqlPedido)) {
+                ps1.setInt(1, idPedido); ps1.executeUpdate();
+                ps2.setInt(1, idPedido); ps2.executeUpdate();
+                ps3.setInt(1, idPedido); ps3.executeUpdate();
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         }
     }
 }

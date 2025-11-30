@@ -13,16 +13,16 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import javax.swing.table.DefaultTableModel;
 
 public class MainController {
     private MainFrame mainFrame;
-    
-    // Vistas 
     private LoginViewModern loginView;
     private DashboardViewModern dashboardView;
     private RegistroPanel registroPanel;
 
-    // DAOs
     private UsuarioDAO usuarioDAO;
     private EmprendimientoDAO empDAO;
     private ProductoDAO productoDAO;
@@ -30,11 +30,9 @@ public class MainController {
     private PedidoDAO pedidoDAO;
     private VentaDAO ventaDAO;
 
-    // Sesión
     private Usuario usuarioLogueado;
 
     public MainController() {
-        // 1. Inicializar DAOs
         usuarioDAO = new UsuarioDAO();
         empDAO = new EmprendimientoDAO();
         productoDAO = new ProductoDAO();
@@ -42,23 +40,19 @@ public class MainController {
         pedidoDAO = new PedidoDAO();
         ventaDAO = new VentaDAO();
 
-        // 2. Inicializar Vistas
         mainFrame = new MainFrame();
         loginView = new LoginViewModern();
         dashboardView = new DashboardViewModern();
         registroPanel = new RegistroPanel();
 
-        // 3. Configurar navegación
         mainFrame.cardPanel.add(loginView, "LOGIN");
         mainFrame.cardPanel.add(registroPanel, "REGISTRO");
         mainFrame.cardPanel.add(dashboardView, "DASHBOARD");
 
-        // 4. Configurar Listeners
         initLoginEvents();
         initRegistroEvents();
         initDashboardEvents();
 
-        // 5. Mostrar inicio
         mainFrame.mostrarPanel("LOGIN");
         mainFrame.setVisible(true);
     }
@@ -73,7 +67,6 @@ public class MainController {
             }
             autenticar(correo, pass);
         });
-
         loginView.btnIrARegistro.addActionListener(e -> mainFrame.mostrarPanel("REGISTRO"));
     }
 
@@ -83,175 +76,456 @@ public class MainController {
     }
 
     private void initDashboardEvents() {
-        // --- Navegación del Sidebar ---
-        dashboardView.btnNavDashboard.addActionListener(e -> {
-            dashboardView.mostrarPanel("DASHBOARD");
-            cargarDatosDashboard(); // Recargar KPIs y gráficos al entrar
-        });
-        dashboardView.btnNavInventario.addActionListener(e -> {
-            dashboardView.mostrarPanel("INVENTARIO");
-            cargarInventario();
-        });
-        dashboardView.btnNavClientes.addActionListener(e -> {
-            dashboardView.mostrarPanel("CLIENTES");
-            cargarClientes();
-        });
-        dashboardView.btnNavVentas.addActionListener(e -> {
-            dashboardView.mostrarPanel("VENTAS");
-            cargarHistorialVentas();
-        });
-
-        // --- Botones de Acción ---
+        // --- NAVEGACIÓN ---
+        dashboardView.btnNavDashboard.addActionListener(e -> { dashboardView.mostrarPanel("DASHBOARD"); cargarDatosDashboard(); });
+        dashboardView.btnNavPedidos.addActionListener(e -> { dashboardView.mostrarPanel("PEDIDOS"); cargarPedidosActivos(); });
+        dashboardView.btnNavInventario.addActionListener(e -> { dashboardView.mostrarPanel("INVENTARIO"); cargarInventario(); });
+        dashboardView.btnNavClientes.addActionListener(e -> { dashboardView.mostrarPanel("CLIENTES"); cargarClientes(); });
+        dashboardView.btnNavVentas.addActionListener(e -> { dashboardView.mostrarPanel("VENTAS"); cargarHistorialVentas(); });
         dashboardView.btnSalir.addActionListener(e -> cerrarSesion());
-        dashboardView.btnAddProducto.addActionListener(e -> abrirDialogoProducto());
-        dashboardView.btnAddCliente.addActionListener(e -> abrirDialogoCliente());
-        dashboardView.btnNuevaVenta.addActionListener(e -> abrirDialogoNuevaVenta());
-    }
 
-    private void autenticar(String correo, String pass) {
+        // --- ACCIONES INVENTARIO ---
+        dashboardView.btnAddProducto.addActionListener(e -> abrirDialogoProducto(null)); // null = Crear
+        dashboardView.btnEditProducto.addActionListener(e -> editarProductoSeleccionado());
+        dashboardView.btnDelProducto.addActionListener(e -> eliminarProductoSeleccionado());
+
+        // --- ACCIONES CLIENTES ---
+        dashboardView.btnAddCliente.addActionListener(e -> abrirDialogoCliente(null)); // null = Crear
+        dashboardView.btnEditCliente.addActionListener(e -> editarClienteSeleccionado());
+        dashboardView.btnDelCliente.addActionListener(e -> eliminarClienteSeleccionado());
+
+        // --- ACCIONES PEDIDOS ---
+        dashboardView.btnNuevoPedido.addActionListener(e -> abrirDialogoNuevoPedido());
+        dashboardView.btnCompletarPedido.addActionListener(e -> completarPedidoSeleccionado());
+        dashboardView.btnCancelarPedido.addActionListener(e -> eliminarPedidoSeleccionado(dashboardView.tablaPedidos, dashboardView.modeloPedidos));
+        
+        // Ajuste visual inicial
+        actualizarTitulosVisuales();
+    }
+    
+    // Método auxiliar para cambiar los títulos de las tarjetas en la vista sin editar el archivo View
+    private void actualizarTitulosVisuales() {
         try {
-            usuarioLogueado = usuarioDAO.login(correo, pass);
-            
-            if (usuarioLogueado != null) {
-                Emprendimiento emp = empDAO.obtenerPorUsuario(usuarioLogueado.getId());
-                
-                if (emp == null) {
-                    JOptionPane.showMessageDialog(mainFrame, "Usuario encontrado pero sin negocio configurado.");
-                    return;
+            // Cambiar "Ticket Promedio" -> "Cliente Top"
+            Container parent1 = dashboardView.lblPromedioVenta.getParent();
+            for(Component c : parent1.getComponents()) {
+                if(c instanceof JLabel) {
+                    JLabel l = (JLabel)c;
+                    if(l.getText().contains("Ticket") || l.getText().contains("Promedio")) l.setText("Cliente Top");
                 }
-                
-                usuarioLogueado.setEmprendimiento(emp);
-                // JOptionPane.showMessageDialog(mainFrame, "Bienvenido " + usuarioLogueado.getNombre());
-                
-                // Cargar datos silenciosamente antes de mostrar
-                cargarDatosDashboard();
-                mainFrame.mostrarPanel("DASHBOARD");
-            } else {
-                JOptionPane.showMessageDialog(mainFrame, "Credenciales incorrectas", "Error", JOptionPane.ERROR_MESSAGE);
             }
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(mainFrame, "Error de conexión: " + ex.getMessage());
+            // Cambiar "Producto Estrella" -> "Más Vendido"
+            Container parent2 = dashboardView.lblProductoMasVendido.getParent();
+            for(Component c : parent2.getComponents()) {
+                if(c instanceof JLabel) {
+                    JLabel l = (JLabel)c;
+                    if(l.getText().contains("Estrella")) l.setText("Más Vendido");
+                }
+            }
+        } catch(Exception e) { /* Ignorar errores de UI */ }
+    }
+
+    // ==========================================
+    // LÓGICA DE PEDIDOS Y VENTAS (CORE)
+    // ==========================================
+
+    private void abrirDialogoNuevoPedido() {
+        // Diálogo simplificado para crear PEDIDO PENDIENTE
+        JDialog dialog = new JDialog(mainFrame, "Nuevo Pedido", true);
+        dialog.setSize(400, 350);
+        dialog.setLayout(new BorderLayout());
+        dialog.setLocationRelativeTo(mainFrame);
+        
+        JPanel form = new JPanel(new GridLayout(4, 2, 10, 10));
+        form.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        JComboBox<Cliente> cbClientes = new JComboBox<>();
+        JComboBox<Producto> cbProductos = new JComboBox<>();
+        JTextField txtCant = new JTextField("1");
+        
+        // Cargar datos
+        try {
+            int empId = usuarioLogueado.getEmprendimiento().getId();
+            clienteDAO.listarClientes(empId).forEach(cbClientes::addItem);
+            productoDAO.listarPorEmprendimiento(empId).forEach(cbProductos::addItem);
+        } catch (SQLException e) { e.printStackTrace(); }
+
+        // Renderizadores
+        cbClientes.setRenderer(new DefaultListCellRenderer() {
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if(value instanceof Cliente) setText(((Cliente)value).getNombre());
+                return this;
+            }
+        });
+        cbProductos.setRenderer(new DefaultListCellRenderer() {
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if(value instanceof Producto) setText(((Producto)value).getNombre() + " (Stock: " + ((Producto)value).getStock() + ")");
+                return this;
+            }
+        });
+
+        form.add(new JLabel("Cliente:")); form.add(cbClientes);
+        form.add(new JLabel("Producto:")); form.add(cbProductos);
+        form.add(new JLabel("Cantidad:")); form.add(txtCant);
+
+        JButton btnSave = new JButton("Crear Pedido");
+        btnSave.addActionListener(e -> {
+            try {
+                Cliente cli = (Cliente) cbClientes.getSelectedItem();
+                Producto prod = (Producto) cbProductos.getSelectedItem();
+                int cant = Integer.parseInt(txtCant.getText());
+
+                if(cli == null || prod == null || cant <= 0) {
+                    JOptionPane.showMessageDialog(dialog, "Datos inválidos"); return;
+                }
+                if(cant > prod.getStock()) {
+                    JOptionPane.showMessageDialog(dialog, "Stock insuficiente"); return;
+                }
+
+                // Crear Pedido PENDIENTE
+                Pedido p = new Pedido();
+                p.setCliente(cli);
+                p.setFechaPedido(new Date());
+                p.setEstado(Estado.PENDIENTE);
+                
+                ItemPedido item = new ItemPedido(0, prod, cant, prod.getPrecio());
+                List<ItemPedido> items = new ArrayList<>();
+                items.add(item);
+                p.setItems(items);
+
+                pedidoDAO.crearPedido(p, usuarioLogueado.getEmprendimiento().getId());
+                
+                // Descontar stock inmediatamente (reserva)
+                prod.setStock(prod.getStock() - cant);
+                productoDAO.actualizarProducto(prod);
+
+                JOptionPane.showMessageDialog(dialog, "Pedido creado (Pendiente de pago).");
+                dialog.dispose();
+                cargarPedidosActivos();
+                cargarDatosDashboard();
+
+            } catch (Exception ex) { ex.printStackTrace(); }
+        });
+
+        dialog.add(form, BorderLayout.CENTER);
+        dialog.add(btnSave, BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
+
+    private void completarPedidoSeleccionado() {
+        int row = dashboardView.tablaPedidos.getSelectedRow();
+        if(row == -1) { JOptionPane.showMessageDialog(mainFrame, "Seleccione un pedido pendiente."); return; }
+        
+        int idPedido = (int) dashboardView.modeloPedidos.getValueAt(row, 0);
+        
+        // Diálogo para elegir método de pago
+        JComboBox<MetodoPago> cbPago = new JComboBox<>(MetodoPago.values());
+        int res = JOptionPane.showConfirmDialog(mainFrame, cbPago, "Confirmar Pago / Completar", JOptionPane.OK_CANCEL_OPTION);
+        
+        if(res == JOptionPane.OK_OPTION) {
+            try {
+                // 1. Actualizar estado a ENTREGADO/COMPLETADO
+                pedidoDAO.actualizarEstado(idPedido, Estado.ENTREGADO);
+                
+                // 2. Registrar Venta Financiera
+                Venta v = new Venta();
+                v.setId(idPedido);
+                v.setFechaVenta(new Date());
+                v.setMetodoPago((MetodoPago) cbPago.getSelectedItem());
+                ventaDAO.registrarVenta(v);
+
+                JOptionPane.showMessageDialog(mainFrame, "Pedido completado y movido a Ventas.");
+                cargarPedidosActivos();
+                cargarDatosDashboard();
+                
+            } catch (SQLException e) { JOptionPane.showMessageDialog(mainFrame, "Error: " + e.getMessage()); }
         }
     }
 
-    private void registrarUsuarioYNegocio() {
-        if(registroPanel.txtDni.getText().isEmpty() || registroPanel.txtCorreo.getText().isEmpty()) {
-            JOptionPane.showMessageDialog(mainFrame, "DNI y Correo son obligatorios.");
-            return;
-        }
+    // ==========================================
+    // EDICIÓN Y ELIMINACIÓN
+    // ==========================================
+
+    private void editarProductoSeleccionado() {
+        int row = dashboardView.tablaInventario.getSelectedRow();
+        if(row == -1) { JOptionPane.showMessageDialog(mainFrame, "Seleccione un producto."); return; }
+        int id = (int) dashboardView.modeloInventario.getValueAt(row, 0);
 
         try {
-            Usuario u = new Usuario(0, registroPanel.txtCorreo.getText(), new String(registroPanel.txtPass.getPassword()), null);
-            u.setDNI(registroPanel.txtDni.getText());
-            u.setNombre(registroPanel.txtNombre.getText());
-            u.setApellido(registroPanel.txtApellido.getText());
-            u.setNumero(registroPanel.txtTelefono.getText());
-            u.setDireccion(registroPanel.txtDireccionUser.getText());
-            try { u.setEdad(Integer.parseInt(registroPanel.txtEdad.getText())); } catch (Exception e) { u.setEdad(0); }
+            // Buscar producto original (simplificado: iteramos lista o traemos de BD)
+            // Para ser robustos, buscamos en BD (reusamos lógica de lista filtrada)
+            Producto p = productoDAO.listarPorEmprendimiento(usuarioLogueado.getEmprendimiento().getId())
+                        .stream().filter(prod -> prod.getId() == id).findFirst().orElse(null);
+            
+            if(p != null) abrirDialogoProducto(p); // Abrimos diálogo en modo EDICIÓN
+            
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+    
+    private void editarClienteSeleccionado() {
+        int row = dashboardView.tablaClientes.getSelectedRow();
+        if(row == -1) { JOptionPane.showMessageDialog(mainFrame, "Seleccione un cliente."); return; }
+        int id = (int) dashboardView.modeloClientes.getValueAt(row, 0);
+        
+        try {
+            Cliente c = clienteDAO.listarClientes(usuarioLogueado.getEmprendimiento().getId())
+                        .stream().filter(cli -> cli.getId() == id).findFirst().orElse(null);
+            
+            if(c != null) abrirDialogoCliente(c);
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
 
-            usuarioDAO.crearUsuario(u); 
-
-            Emprendimiento emp = new Emprendimiento(
-                    registroPanel.txtNombreEmp.getText(),
-                    registroPanel.txtDescEmp.getText()
-            );
-            empDAO.registrarEmprendimiento(emp, u.getId());
-
-            JOptionPane.showMessageDialog(mainFrame, "¡Cuenta creada! Inicia sesión.");
-            limpiarCamposRegistro();
-            mainFrame.mostrarPanel("LOGIN");
-
-        } catch (SQLException ex) {
-            if(ex.getMessage().contains("Duplicate")) {
-                JOptionPane.showMessageDialog(mainFrame, "Correo o DNI ya registrados.");
-            } else {
-                ex.printStackTrace();
-            }
+    private void eliminarProductoSeleccionado() {
+        int row = dashboardView.tablaInventario.getSelectedRow();
+        if(row == -1) return;
+        int id = (int) dashboardView.modeloInventario.getValueAt(row, 0);
+        if(JOptionPane.showConfirmDialog(mainFrame, "¿Eliminar producto?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+            try { productoDAO.eliminarProducto(id); cargarInventario(); cargarDatosDashboard(); } catch (SQLException e) { e.printStackTrace(); }
         }
     }
 
-    // --- MÉTODOS DE CARGA DE DATOS (ROBUSTOS) ---
+    private void eliminarClienteSeleccionado() {
+        int row = dashboardView.tablaClientes.getSelectedRow();
+        if(row == -1) return;
+        int id = (int) dashboardView.modeloClientes.getValueAt(row, 0);
+        if(JOptionPane.showConfirmDialog(mainFrame, "¿Eliminar cliente y sus pedidos?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+            try { clienteDAO.eliminarCliente(id); cargarClientes(); cargarDatosDashboard(); } catch (SQLException e) { e.printStackTrace(); }
+        }
+    }
+
+    private void eliminarPedidoSeleccionado(JTable tabla, DefaultTableModel modelo) {
+        int row = tabla.getSelectedRow();
+        if(row == -1) return;
+        int id = (int) modelo.getValueAt(row, 0);
+        if(JOptionPane.showConfirmDialog(mainFrame, "¿Eliminar registro?", "Confirmar", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+            try { pedidoDAO.eliminarPedido(id); cargarPedidosActivos(); cargarHistorialVentas(); cargarDatosDashboard(); } catch (SQLException e) { e.printStackTrace(); }
+        }
+    }
+
+    // ==========================================
+    // DIÁLOGOS DE CREACIÓN / EDICIÓN (REUTILIZABLES)
+    // ==========================================
+
+    private void abrirDialogoProducto(Producto prodEditar) {
+        boolean esEdicion = (prodEditar != null);
+        String titulo = esEdicion ? "Editar Producto" : "Nuevo Producto";
+        
+        JTextField txtNombre = new JTextField(esEdicion ? prodEditar.getNombre() : "");
+        JTextField txtDesc = new JTextField(esEdicion ? prodEditar.getDescripcion() : "");
+        JTextField txtPrecio = new JTextField(esEdicion ? String.valueOf(prodEditar.getPrecio()) : "");
+        JTextField txtStock = new JTextField(esEdicion ? String.valueOf(prodEditar.getStock()) : "");
+        JComboBox<Categoria> cmbCat = new JComboBox<>(Categoria.values());
+        if(esEdicion) cmbCat.setSelectedItem(prodEditar.getCategoria());
+
+        JPanel panel = new JPanel(new GridLayout(0, 1));
+        panel.add(new JLabel("Nombre:")); panel.add(txtNombre);
+        panel.add(new JLabel("Descripción:")); panel.add(txtDesc);
+        panel.add(new JLabel("Precio:")); panel.add(txtPrecio);
+        panel.add(new JLabel("Stock:")); panel.add(txtStock);
+        panel.add(new JLabel("Categoría:")); panel.add(cmbCat);
+
+        if(JOptionPane.showConfirmDialog(mainFrame, panel, titulo, JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
+            try {
+                Producto p = esEdicion ? prodEditar : new Producto();
+                p.setNombre(txtNombre.getText());
+                p.setDescripcion(txtDesc.getText());
+                p.setPrecio(Double.parseDouble(txtPrecio.getText()));
+                p.setStock(Integer.parseInt(txtStock.getText()));
+                p.setCategoria((Categoria) cmbCat.getSelectedItem());
+
+                if(esEdicion) productoDAO.actualizarProducto(p);
+                else productoDAO.guardarProducto(p, usuarioLogueado.getEmprendimiento().getId());
+                
+                cargarInventario(); cargarDatosDashboard();
+            } catch (Exception e) { JOptionPane.showMessageDialog(mainFrame, "Error: " + e.getMessage()); }
+        }
+    }
+
+    private void abrirDialogoCliente(Cliente cliEditar) {
+        boolean esEdicion = (cliEditar != null);
+        
+        JTextField txtDni = new JTextField(esEdicion ? cliEditar.getDNI() : "");
+        JTextField txtNom = new JTextField(esEdicion ? cliEditar.getNombre() : "");
+        JTextField txtApe = new JTextField(esEdicion ? cliEditar.getApellido() : "");
+        JTextField txtTel = new JTextField(esEdicion ? cliEditar.getNumero() : "");
+        JTextField txtDir = new JTextField(esEdicion ? cliEditar.getDireccion() : "");
+
+        JPanel panel = new JPanel(new GridLayout(0, 1));
+        panel.add(new JLabel("DNI:")); panel.add(txtDni);
+        panel.add(new JLabel("Nombre:")); panel.add(txtNom);
+        panel.add(new JLabel("Apellido:")); panel.add(txtApe);
+        panel.add(new JLabel("Teléfono:")); panel.add(txtTel);
+        panel.add(new JLabel("Dirección:")); panel.add(txtDir);
+
+        if(JOptionPane.showConfirmDialog(mainFrame, panel, esEdicion ? "Editar Cliente" : "Nuevo Cliente", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
+            try {
+                Cliente c = esEdicion ? cliEditar : new Cliente(0, null, null);
+                c.setDNI(txtDni.getText());
+                c.setNombre(txtNom.getText());
+                c.setApellido(txtApe.getText());
+                c.setNumero(txtTel.getText());
+                c.setDireccion(txtDir.getText());
+                if(!esEdicion) c.setCalificacion(5);
+
+                if(esEdicion) clienteDAO.actualizarCliente(c);
+                else clienteDAO.guardarCliente(c, usuarioLogueado.getEmprendimiento().getId());
+                
+                cargarClientes(); cargarDatosDashboard();
+            } catch (Exception e) { JOptionPane.showMessageDialog(mainFrame, "Error: " + e.getMessage()); }
+        }
+    }
+
+    // ==========================================
+    // CARGA DE DATOS (TABLAS Y DASHBOARD)
+    // ==========================================
+
+    private void cargarPedidosActivos() {
+        int empId = usuarioLogueado.getEmprendimiento().getId();
+        try {
+            List<Pedido> todos = pedidoDAO.listarPedidos(empId);
+            dashboardView.modeloPedidos.setRowCount(0);
+            for(Pedido p : todos) {
+                // FILTRO LÓGICO: Solo mostrar PENDIENTE o EN_CAMINO en esta pestaña
+                if(p.getEstado() == Estado.PENDIENTE || p.getEstado() == Estado.PENDIENTE) {
+                     double total = p.getItems().stream().mapToDouble(i->i.getCantidad()*i.getPrecioUnitario()).sum();
+                     dashboardView.modeloPedidos.addRow(new Object[]{
+                         p.getId(), p.getFechaPedido(), p.getCliente().getNombre(), String.format("%.2f", total), p.getEstado()
+                     });
+                }
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+
+    private void cargarHistorialVentas() {
+        int empId = usuarioLogueado.getEmprendimiento().getId();
+        try {
+            List<Pedido> todos = pedidoDAO.listarPedidos(empId);
+            dashboardView.modeloVentas.setRowCount(0);
+            for(Pedido p : todos) {
+                // FILTRO LÓGICO: Solo mostrar ENTREGADO/COMPLETADO
+                if(p.getEstado() == Estado.ENTREGADO || p.getEstado() == Estado.CANCELADO) {
+                     double total = p.getItems().stream().mapToDouble(i->i.getCantidad()*i.getPrecioUnitario()).sum();
+                     dashboardView.modeloVentas.addRow(new Object[]{
+                         p.getId(), p.getFechaPedido(), p.getCliente().getNombre(), String.format("%.2f", total), "Ver Detalle"
+                     });
+                }
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
 
     private void cargarDatosDashboard() {
-        if (usuarioLogueado == null || usuarioLogueado.getEmprendimiento() == null) return;
-        int empId = usuarioLogueado.getEmprendimiento().getId(); 
+        if (usuarioLogueado == null) return;
+        int empId = usuarioLogueado.getEmprendimiento().getId();
 
-        // Usamos try-catch individuales para que si falla uno, los demás se carguen igual.
-        
-        // 1. Ingresos y Ventas
-        double ingresos = 0.0;
-        try {
-            ingresos = ventaDAO.obtenerIngresosTotales(empId);
-            dashboardView.lblTotalVentas.setText(String.format("$ %.2f", ingresos));
-        } catch (Exception e) {
-            System.err.println("Error cargando ingresos: " + e.getMessage());
-            dashboardView.lblTotalVentas.setText("$ 0.00");
-        }
-
-        // 2. Clientes
-        try {
-            List<Cliente> clientes = clienteDAO.listarClientes(empId);
-            dashboardView.lblTotalClientes.setText(String.valueOf(clientes.size()));
-        } catch (Exception e) {
-            System.err.println("Error cargando clientes: " + e.getMessage());
-            dashboardView.lblTotalClientes.setText("0");
-        }
-
-        // 3. Productos / Stock
-        List<Producto> productos = new ArrayList<>();
-        try {
-            productos = productoDAO.listarPorEmprendimiento(empId);
-            int stockTotal = productos.stream().mapToInt(Producto::getStock).sum();
-            dashboardView.lblTotalProductos.setText(String.valueOf(stockTotal));
-            
-            // Producto más vendido / Estrella (Simulación basada en stock bajo = alta demanda, o primer producto)
-            if (!productos.isEmpty()) {
-                dashboardView.lblProductoMasVendido.setText(productos.get(0).getNombre());
-            } else {
-                dashboardView.lblProductoMasVendido.setText("---");
-            }
-        } catch (Exception e) {
-            System.err.println("Error cargando productos: " + e.getMessage());
-            dashboardView.lblTotalProductos.setText("0");
-        }
-
-        // 4. Ticket Promedio
         try {
             List<Pedido> pedidos = pedidoDAO.listarPedidos(empId);
-            double ticketPromedio = pedidos.isEmpty() ? 0 : ingresos / pedidos.size();
-            dashboardView.lblPromedioVenta.setText(String.format("$ %.2f", ticketPromedio));
-        } catch (Exception e) {
-            System.err.println("Error calculando promedio: " + e.getMessage());
-            dashboardView.lblPromedioVenta.setText("$ 0.00");
-        }
-        
-        // 5. Actualizar Gráfico
-        actualizarGrafico(ingresos);
-    }
+            List<Producto> productos = productoDAO.listarPorEmprendimiento(empId);
+            List<Cliente> clientes = clienteDAO.listarClientes(empId);
 
-    private void actualizarGrafico(double ingresosTotales) {
-        // Generamos una visualización basada en el total real para que no se vea vacío
-        List<Double> valores = new ArrayList<>();
-        List<String> etiquetas = new ArrayList<>();
-        
-        if (ingresosTotales > 0) {
-            // Distribuimos el total en 5 barras simulando actividad reciente
-            valores.add(ingresosTotales * 0.10); etiquetas.add("Sem 1");
-            valores.add(ingresosTotales * 0.15); etiquetas.add("Sem 2");
-            valores.add(ingresosTotales * 0.30); etiquetas.add("Sem 3");
-            valores.add(ingresosTotales * 0.25); etiquetas.add("Sem 4");
-            valores.add(ingresosTotales * 0.20); etiquetas.add("Actual");
-        } else {
-            // Gráfico vacío placeholder
-            valores.add(0.0); etiquetas.add("Inicio");
-            valores.add(0.0); etiquetas.add("---");
-            valores.add(0.0); etiquetas.add("---");
-            valores.add(0.0); etiquetas.add("---");
-            valores.add(0.0); etiquetas.add("Actual");
-        }
-        
-        dashboardView.chartVentas.setData(valores, etiquetas);
+            // Filtrar solo ventas completadas para ingresos
+            List<Pedido> ventasCompletadas = pedidos.stream()
+                .filter(p -> p.getEstado() == Estado.ENTREGADO)
+                .collect(Collectors.toList());
+
+            double ingresos = ventasCompletadas.stream()
+                .flatMap(p -> p.getItems().stream())
+                .mapToDouble(i -> i.getCantidad() * i.getPrecioUnitario())
+                .sum();
+
+            // Actualizar Etiquetas Principales
+            dashboardView.lblTotalVentas.setText(String.format("$ %.2f", ingresos));
+            dashboardView.lblTotalClientes.setText(String.valueOf(clientes.size()));
+            dashboardView.lblTotalProductos.setText(String.valueOf(productos.stream().mapToInt(Producto::getStock).sum()));
+
+            // --- 1. CLIENTE TOP (El que más ha gastado) ---
+            Map<Integer, Double> comprasPorCliente = ventasCompletadas.stream()
+                .collect(Collectors.groupingBy(
+                    p -> p.getCliente().getId(),
+                    Collectors.summingDouble(p -> p.getItems().stream().mapToDouble(i -> i.getCantidad() * i.getPrecioUnitario()).sum())
+                ));
+
+            String clienteTop = "---";
+            if (!comprasPorCliente.isEmpty()) {
+                Map.Entry<Integer, Double> maxCliente = comprasPorCliente.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .orElse(null);
+                
+                if (maxCliente != null) {
+                    clienteTop = clientes.stream()
+                        .filter(c -> c.getId() == maxCliente.getKey())
+                        .findFirst()
+                        .map(c -> c.getNombre() + " " + c.getApellido())
+                        .orElse("Desconocido");
+                }
+            }
+            // Reutilizamos el label de promedio para el nombre del cliente
+            dashboardView.lblPromedioVenta.setText(clienteTop); 
+
+            // --- 2. PRODUCTO MÁS VENDIDO (Por Cantidad) ---
+            Map<Integer, Integer> cantidadPorProducto = ventasCompletadas.stream()
+                .flatMap(p -> p.getItems().stream())
+                .collect(Collectors.groupingBy(
+                    i -> i.getProducto().getId(),
+                    Collectors.summingInt(ItemPedido::getCantidad)
+                ));
+            
+            String prodTop = "---";
+            if (!cantidadPorProducto.isEmpty()) {
+                Map.Entry<Integer, Integer> maxProd = cantidadPorProducto.entrySet().stream()
+                    .max(Map.Entry.comparingByValue())
+                    .orElse(null);
+                
+                if (maxProd != null) {
+                    prodTop = productos.stream()
+                        .filter(p -> p.getId() == maxProd.getKey())
+                        .findFirst()
+                        .map(Producto::getNombre)
+                        .orElse("---");
+                    prodTop += " (" + maxProd.getValue() + ")"; // Ej: "Camisa (15)"
+                }
+            }
+            dashboardView.lblProductoMasVendido.setText(prodTop);
+
+            // ACTUALIZAR GRÁFICOS REALES
+            
+            // 1. Ingresos (Últimas 5 ventas completadas)
+            List<Double> dataIngresos = new ArrayList<>();
+            List<String> labelIngresos = new ArrayList<>();
+            for(int i = 0; i < Math.min(5, ventasCompletadas.size()); i++) {
+                Pedido p = ventasCompletadas.get(i);
+                double tot = p.getItems().stream().mapToDouble(it->it.getCantidad()*it.getPrecioUnitario()).sum();
+                dataIngresos.add(tot);
+                labelIngresos.add("P-" + p.getId());
+            }
+            dashboardView.chartIngresos.setData(dataIngresos, labelIngresos);
+
+            // 2. Volumen Pedidos (Línea)
+            List<Double> dataVol = new ArrayList<>();
+            List<String> labelVol = new ArrayList<>();
+            int count = 0;
+            for(Pedido p : pedidos) {
+                if(count++ >= 7) break; 
+                double itemsCount = p.getItems().stream().mapToInt(ItemPedido::getCantidad).sum();
+                dataVol.add(itemsCount);
+                labelVol.add(String.valueOf(p.getId()));
+            }
+            dashboardView.chartPedidos.setData(dataVol, labelVol);
+
+            // 3. Stock por Categoría
+            Map<Categoria, Integer> stockPorCat = productos.stream()
+                .collect(Collectors.groupingBy(Producto::getCategoria, Collectors.summingInt(Producto::getStock)));
+            
+            List<Double> dataCat = new ArrayList<>();
+            List<String> labelCat = new ArrayList<>();
+            stockPorCat.forEach((k, v) -> {
+                dataCat.add(v.doubleValue());
+                labelCat.add(k.toString());
+            });
+            dashboardView.chartMetodos.setData(dataCat, labelCat);
+
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     private void cargarInventario() {
@@ -260,13 +534,9 @@ public class MainController {
             List<Producto> lista = productoDAO.listarPorEmprendimiento(empId);
             dashboardView.modeloInventario.setRowCount(0);
             for (Producto p : lista) {
-                dashboardView.modeloInventario.addRow(new Object[]{
-                    p.getId(), p.getNombre(), String.format("$ %.2f", p.getPrecio()), p.getStock(), p.getCategoria()
-                });
+                dashboardView.modeloInventario.addRow(new Object[]{p.getId(), p.getNombre(), p.getDescripcion(), p.getPrecio(), p.getStock(), p.getCategoria()});
             }
-        } catch (Exception e) { 
-            e.printStackTrace(); 
-        }
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     private void cargarClientes() {
@@ -275,209 +545,46 @@ public class MainController {
             List<Cliente> lista = clienteDAO.listarClientes(empId);
             dashboardView.modeloClientes.setRowCount(0);
             for (Cliente c : lista) {
-                dashboardView.modeloClientes.addRow(new Object[]{
-                    c.getId(), c.getDNI(), c.getNombre() + " " + c.getApellido(), c.getNumero(), "Ver Historial"
-                });
+                dashboardView.modeloClientes.addRow(new Object[]{c.getId(), c.getDNI(), c.getNombre() + " " + c.getApellido(), c.getNumero(), c.getDireccion(), c.getCalificacion()});
             }
         } catch (Exception e) { e.printStackTrace(); }
     }
 
-    private void cargarHistorialVentas() {
-        int empId = usuarioLogueado.getEmprendimiento().getId();
+    // --- MÉTODOS DE APOYO ---
+    private void autenticar(String correo, String pass) {
         try {
-            List<Pedido> lista = pedidoDAO.listarPedidos(empId);
-            dashboardView.modeloVentas.setRowCount(0);
-            for (Pedido p : lista) {
-                double total = p.getItems() != null ? 
-                    p.getItems().stream().mapToDouble(i -> i.getCantidad() * i.getPrecioUnitario()).sum() : 0.0;
-                
-                String nombreCliente = (p.getCliente() != null) ? p.getCliente().getNombre() : "Desconocido";
-                
-                dashboardView.modeloVentas.addRow(new Object[]{
-                    p.getId(), p.getFechaPedido(), nombreCliente, String.format("$ %.2f", total), p.getEstado()
-                });
-            }
-        } catch (Exception e) { e.printStackTrace(); }
+            usuarioLogueado = usuarioDAO.login(correo, pass);
+            if (usuarioLogueado != null) {
+                Emprendimiento emp = empDAO.obtenerPorUsuario(usuarioLogueado.getId());
+                if(emp != null) {
+                    usuarioLogueado.setEmprendimiento(emp);
+                    cargarDatosDashboard();
+                    actualizarTitulosVisuales(); // Asegurar que se actualicen los títulos al entrar
+                    mainFrame.mostrarPanel("DASHBOARD");
+                } else JOptionPane.showMessageDialog(mainFrame, "Sin negocio configurado.");
+            } else JOptionPane.showMessageDialog(mainFrame, "Credenciales incorrectas.");
+        } catch (SQLException e) { e.printStackTrace(); }
     }
 
-    // --- DIÁLOGOS DE REGISTRO ---
-
-    private void abrirDialogoNuevaVenta() {
-        JDialog dialog = new JDialog(mainFrame, "Nueva Venta", true);
-        dialog.setSize(500, 450);
-        dialog.setLayout(new BorderLayout());
-        dialog.setLocationRelativeTo(mainFrame);
-
-        JPanel formPanel = new JPanel(new GridLayout(6, 2, 10, 10));
-        formPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-
-        JComboBox<Cliente> comboClientes = new JComboBox<>();
-        JComboBox<Producto> comboProductos = new JComboBox<>();
-
+    private void registrarUsuarioYNegocio() {
+        // ... (Misma lógica previa de registro)
+        if(registroPanel.txtDni.getText().isEmpty() || registroPanel.txtCorreo.getText().isEmpty()) {
+            JOptionPane.showMessageDialog(mainFrame, "DNI y Correo obligatorios."); return;
+        }
         try {
-            int empId = usuarioLogueado.getEmprendimiento().getId();
-            List<Cliente> clientes = clienteDAO.listarClientes(empId);
-            List<Producto> productos = productoDAO.listarPorEmprendimiento(empId);
-
-            for (Cliente c : clientes) comboClientes.addItem(c);
-            for (Producto p : productos) comboProductos.addItem(p);
-
+            Usuario u = new Usuario(0, registroPanel.txtCorreo.getText(), new String(registroPanel.txtPass.getPassword()), null);
+            u.setDNI(registroPanel.txtDni.getText()); u.setNombre(registroPanel.txtNombre.getText()); u.setApellido(registroPanel.txtApellido.getText());
+            u.setNumero(registroPanel.txtTelefono.getText()); u.setDireccion(registroPanel.txtDireccionUser.getText());
+            try { u.setEdad(Integer.parseInt(registroPanel.txtEdad.getText())); } catch (Exception e) { u.setEdad(0); }
+            usuarioDAO.crearUsuario(u); 
+            Emprendimiento emp = new Emprendimiento(registroPanel.txtNombreEmp.getText(), registroPanel.txtDescEmp.getText());
+            empDAO.registrarEmprendimiento(emp, u.getId());
+            JOptionPane.showMessageDialog(mainFrame, "Cuenta creada.");
+            limpiarCamposRegistro();
+            mainFrame.mostrarPanel("LOGIN");
         } catch (SQLException ex) { ex.printStackTrace(); }
-
-        // Renderizadores simples para los combos
-        comboClientes.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if(value instanceof Cliente) setText(((Cliente)value).getNombre());
-                return this;
-            }
-        });
-        comboProductos.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if(value instanceof Producto) setText(((Producto)value).getNombre() + " (Stock: " + ((Producto)value).getStock() + ")");
-                return this;
-            }
-        });
-
-        JTextField txtCantidad = new JTextField("1");
-        JComboBox<MetodoPago> comboPago = new JComboBox<>(MetodoPago.values());
-
-        formPanel.add(new JLabel("Cliente:")); formPanel.add(comboClientes);
-        formPanel.add(new JLabel("Producto:")); formPanel.add(comboProductos);
-        formPanel.add(new JLabel("Cantidad:")); formPanel.add(txtCantidad);
-        formPanel.add(new JLabel("Método de Pago:")); formPanel.add(comboPago);
-
-        JButton btnRegistrar = new JButton("Confirmar Venta");
-        
-        btnRegistrar.addActionListener(e -> {
-            try {
-                Cliente clienteSel = (Cliente) comboClientes.getSelectedItem();
-                Producto productoSel = (Producto) comboProductos.getSelectedItem();
-                if (clienteSel == null || productoSel == null) {
-                    JOptionPane.showMessageDialog(dialog, "Seleccione cliente y producto.");
-                    return;
-                }
-                
-                int cantidad = Integer.parseInt(txtCantidad.getText());
-                if (cantidad > productoSel.getStock()) {
-                    JOptionPane.showMessageDialog(dialog, "Stock insuficiente.");
-                    return;
-                }
-
-                // 1. Crear Pedido
-                Pedido pedido = new Pedido();
-                pedido.setCliente(clienteSel);
-                pedido.setFechaPedido(new Date());
-                pedido.setEstado(Estado.ENTREGADO);
-
-                // 2. Crear Item
-                ItemPedido item = new ItemPedido(0, productoSel, cantidad, productoSel.getPrecio());
-                List<ItemPedido> items = new ArrayList<>();
-                items.add(item);
-                pedido.setItems(items);
-
-                // 3. Guardar en BD
-                pedidoDAO.crearPedido(pedido, usuarioLogueado.getEmprendimiento().getId());
-
-                // 4. Registrar Venta financiera
-                Venta venta = new Venta();
-                venta.setId(pedido.getId());
-                venta.setMetodoPago((MetodoPago) comboPago.getSelectedItem());
-                venta.setFechaVenta(new Date());
-                ventaDAO.registrarVenta(venta);
-
-                // 5. Descontar Stock y actualizar
-                productoSel.setStock(productoSel.getStock() - cantidad);
-                productoDAO.actualizarProducto(productoSel);
-
-                JOptionPane.showMessageDialog(dialog, "Venta registrada.");
-                dialog.dispose();
-                cargarHistorialVentas(); // Refrescar tabla si estamos ahí
-
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(dialog, "Error: " + ex.getMessage());
-                ex.printStackTrace();
-            }
-        });
-
-        dialog.add(formPanel, BorderLayout.CENTER);
-        dialog.add(btnRegistrar, BorderLayout.SOUTH);
-        dialog.setVisible(true);
-    }
-
-    private void abrirDialogoProducto() {
-        JTextField txtNombre = new JTextField();
-        JTextField txtPrecio = new JTextField();
-        JTextField txtStock = new JTextField();
-        
-        Object[] message = { "Nombre:", txtNombre, "Precio ($):", txtPrecio, "Stock:", txtStock };
-
-        int option = JOptionPane.showConfirmDialog(mainFrame, message, "Nuevo Producto", JOptionPane.OK_CANCEL_OPTION);
-        if (option == JOptionPane.OK_OPTION) {
-            try {
-                Producto p = new Producto();
-                p.setNombre(txtNombre.getText());
-                p.setDescripcion("..."); 
-                p.setPrecio(Double.parseDouble(txtPrecio.getText()));
-                p.setStock(Integer.parseInt(txtStock.getText()));
-                p.setCategoria(Categoria.ROPA); 
-
-                productoDAO.guardarProducto(p, usuarioLogueado.getEmprendimiento().getId());
-                cargarDatosDashboard(); 
-                if (dashboardView.isShowing()) cargarInventario(); // Refrescar si se ve
-                
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(mainFrame, "Datos inválidos: " + ex.getMessage());
-            }
-        }
     }
     
-    private void abrirDialogoCliente() {
-        JTextField txtDni = new JTextField();
-        JTextField txtNombre = new JTextField();
-        JTextField txtApellido = new JTextField();
-        JTextField txtTelefono = new JTextField();
-
-        Object[] message = { "DNI:", txtDni, "Nombre:", txtNombre, "Apellido:", txtApellido, "Teléfono:", txtTelefono };
-
-        int option = JOptionPane.showConfirmDialog(mainFrame, message, "Nuevo Cliente", JOptionPane.OK_CANCEL_OPTION);
-        if (option == JOptionPane.OK_OPTION) {
-            try {
-                Cliente c = new Cliente(0, null, null);
-                c.setDNI(txtDni.getText());
-                c.setNombre(txtNombre.getText());
-                c.setApellido(txtApellido.getText());
-                c.setNumero(txtTelefono.getText());
-                c.setDireccion("");
-                
-                clienteDAO.guardarCliente(c, usuarioLogueado.getEmprendimiento().getId());
-                cargarDatosDashboard();
-                
-            } catch (SQLException ex) {
-                JOptionPane.showMessageDialog(mainFrame, "Error al guardar cliente: " + ex.getMessage());
-            }
-        }
-    }
-
-    private void cerrarSesion() {
-        usuarioLogueado = null;
-        loginView.txtPass.setText("");
-        mainFrame.mostrarPanel("LOGIN");
-    }
-    
-    private void limpiarCamposRegistro() {
-        registroPanel.txtCorreo.setText("");
-        registroPanel.txtPass.setText("");
-        registroPanel.txtDni.setText("");
-        registroPanel.txtNombre.setText("");
-        registroPanel.txtApellido.setText("");
-        registroPanel.txtTelefono.setText("");
-        registroPanel.txtEdad.setText("");
-        registroPanel.txtDireccionUser.setText("");
-        registroPanel.txtNombreEmp.setText("");
-        registroPanel.txtDescEmp.setText("");
-    }
+    private void cerrarSesion() { usuarioLogueado = null; loginView.txtPass.setText(""); mainFrame.mostrarPanel("LOGIN"); }
+    private void limpiarCamposRegistro() { registroPanel.txtCorreo.setText(""); registroPanel.txtPass.setText(""); }
 }
