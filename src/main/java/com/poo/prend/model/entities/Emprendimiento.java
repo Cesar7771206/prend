@@ -1,23 +1,27 @@
 package com.poo.prend.model.entities;
 
-import java.util.*;
+import java.util.List;
 
 public class Emprendimiento {
+    private int id; 
     private String nombre; 
-    private String direccion;
+    // private String direccion; // ELIMINADO
+    private String descripcion; 
     private List<Producto> inventario; 
     private List<Pedido> pedidos; 
     private List<Venta> ventas; 
     private List<Cliente> clientes; 
     
-    public Emprendimiento(String nombre, String direccion) {
+    // Constructor simple
+    public Emprendimiento(String nombre, String descripcion) {
         this.nombre = nombre;
-        this.direccion = direccion;
+        // this.direccion = direccion; // ELIMINADO
+        this.descripcion = descripcion; 
     }
 
-    public Emprendimiento(String nombre, String direccion, List<Producto> inventario, List<Pedido> pedidos, List<Venta> ventas, List<Cliente> clientes) {
+    // Constructor completo
+    public Emprendimiento(String nombre, List<Producto> inventario, List<Pedido> pedidos, List<Venta> ventas, List<Cliente> clientes) {
         this.nombre = nombre;
-        this.direccion = direccion;
         this.inventario = inventario;
         this.pedidos = pedidos;
         this.ventas = ventas;
@@ -30,14 +34,6 @@ public class Emprendimiento {
 
     public void setNombre(String nombre) {
         this.nombre = nombre;
-    }
-
-    public String getDireccion() {
-        return direccion;
-    }
-
-    public void setDireccion(String direccion) {
-        this.direccion = direccion;
     }
 
     public List<Producto> getInventario() {
@@ -71,5 +67,22 @@ public class Emprendimiento {
     public void setClientes(List<Cliente> clientes) {
         this.clientes = clientes;
     }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+    
     
 }

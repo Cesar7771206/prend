@@ -3,6 +3,7 @@ package com.poo.prend.model.entities;
 import java.util.*; 
 
 public class Cliente extends Persona{
+    private int id;
     private int calificacion; 
     private List<Pedido> pedidos; 
     private List<Venta> ventas; 
@@ -36,4 +37,14 @@ public class Cliente extends Persona{
     public void setVentas(List<Venta> ventas) {
         this.ventas = ventas;
     }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+    
+    
 }

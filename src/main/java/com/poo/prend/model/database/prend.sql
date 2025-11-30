@@ -1,66 +1,88 @@
-CREATE DATABASE erp_microemprendimientos;
+DROP DATABASE IF EXISTS prend;
+CREATE DATABASE prend;
+USE prend;
 
-USE erp_microemprendimientos;
-
+-- 1. USUARIOS
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    dni VARCHAR(8), -- Se modifico la bd para que sea solo 8 digitos el dni
-    nombre VARCHAR(100),
+    dni VARCHAR(20) NOT NULL UNIQUE,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    edad INT,
+    numero_telefono VARCHAR(20),
+    direccion VARCHAR(255),
+    correo VARCHAR(100) NOT NULL UNIQUE,
+    contrasena VARCHAR(255) NOT NULL,
+    fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. EMPRENDIMIENTOS
+CREATE TABLE emprendimientos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario INT NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    rubro VARCHAR(50),
+    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id) ON DELETE CASCADE
+);
+
+-- 3. CLIENTES
+CREATE TABLE clientes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_emprendimiento INT NOT NULL,
+    dni VARCHAR(20), -- Cambiado de dni_o_nit a dni para coincidir con Java
+    nombre VARCHAR(100) NOT NULL,
     apellido VARCHAR(100),
-    edad INT,
-    numero VARCHAR(20),
-    direccion VARCHAR(200),
+    numero_telefono VARCHAR(20), -- Cambiado de telefono a numero_telefono para consistencia
+    direccion VARCHAR(255),
     email VARCHAR(100),
-    password VARCHAR(100)
+    calificacion INT DEFAULT 5,
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id) ON DELETE CASCADE
 );
 
-CREATE TABLE emprendedores (
-    id INT PRIMARY KEY,
-    nombre_negocio VARCHAR(100),
-    direccion_negocio VARCHAR(200),
-    FOREIGN KEY (id) REFERENCES usuarios (id) ON DELETE CASCADE
-);
-
-CREATE TABLE cliente (
-    dni VARCHAR(20) PRIMARY KEY,
-    nombre VARCHAR(50),
-    apellido VARCHAR(50),
-    edad INT,
-    numero VARCHAR(20),
-    direccion VARCHAR(100),
-    calificacion INT
-);
-
-CREATE TABLE producto (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    nombre VARCHAR(100),
-    descripcion VARCHAR(200),
-    precio DOUBLE,
-    stock INT,
-    categoria VARCHAR(50)
-);
-
-CREATE TABLE pedido (
+-- 4. PRODUCTOS
+CREATE TABLE productos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    dni_cliente VARCHAR(20),
-    estado VARCHAR(30),
-    fecha_pedido DATE,
-    FOREIGN KEY (dni_cliente) REFERENCES cliente (dni)
+    id_emprendimiento INT NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion VARCHAR(255),
+    precio DECIMAL(10, 2) NOT NULL,
+    stock INT NOT NULL DEFAULT 0,
+    categoria VARCHAR(50),
+    imagen_url VARCHAR(255),
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id) ON DELETE CASCADE
 );
 
-CREATE TABLE item_pedido (
+-- 5. PEDIDOS
+CREATE TABLE pedidos (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    id_pedido INT,
-    id_producto INT,
-    cantidad INT,
-    precio DOUBLE,
-    FOREIGN KEY (id_pedido) REFERENCES pedido (id),
-    FOREIGN KEY (id_producto) REFERENCES producto (id)
+    id_emprendimiento INT NOT NULL,
+    id_cliente INT NOT NULL,
+    fecha_pedido DATETIME DEFAULT CURRENT_TIMESTAMP,
+    estado VARCHAR(50) DEFAULT 'PENDIENTE', -- Cambiado ENUM a VARCHAR para evitar errores de mapeo string
+    total DECIMAL(10, 2) DEFAULT 0.00,
+    observaciones TEXT,
+    FOREIGN KEY (id_emprendimiento) REFERENCES emprendimientos(id),
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id)
 );
 
-CREATE TABLE venta (
-    id INT PRIMARY KEY, -- MISMO ID QUE PEDIDO
-    metodo_pago VARCHAR(50),
-    fecha_venta DATE,
-    FOREIGN KEY (id) REFERENCES pedido (id)
+-- 6. ITEMS PEDIDO
+CREATE TABLE items_pedido (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pedido_id INT NOT NULL,
+    producto_id INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
+    FOREIGN KEY (producto_id) REFERENCES productos(id)
+);
+
+-- 7. VENTAS
+CREATE TABLE ventas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pedido_id INT NOT NULL UNIQUE,
+    metodo_pago VARCHAR(50) NOT NULL,
+    fecha_venta DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE
 );
