@@ -4,5 +4,5 @@ public enum Estado {
     CREADO,
     PENDIENTE, 
     CANCELADO, 
-    FINALIZADO
+    FINALIZADO, ENTREGADO
 }

@@ -1,32 +1,46 @@
 package com.poo.prend.model.database.dao;
 
 import com.poo.prend.model.database.ConnectionDB;
+import com.poo.prend.model.entities.Cliente;
 import com.poo.prend.model.entities.ItemPedido;
 import com.poo.prend.model.entities.Pedido;
+import com.poo.prend.model.entities.Producto;
 import com.poo.prend.model.enums.Estado;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class PedidoDAO {
 
     public void crearPedido(Pedido pedido, int emprendimientoId) throws SQLException {
-        String sqlPedido = "INSERT INTO pedidos (cliente_dni, estado, fecha_pedido, emprendimiento_id) VALUES (?, ?, ?, ?)";
+        String sqlPedido = "INSERT INTO pedidos (id_emprendimiento, id_cliente, fecha_pedido, estado, total) VALUES (?, ?, ?, ?, ?)";
         String sqlItems = "INSERT INTO items_pedido (pedido_id, producto_id, cantidad, precio_unitario) VALUES (?, ?, ?, ?)";
         
         Connection conn = null;
         
         try {
             conn = ConnectionDB.getConnection();
-            conn.setAutoCommit(false); // INICIAR TRANSACCIÓN
+            conn.setAutoCommit(false); // Iniciar transacción
 
-            // 1. Guardar Pedido
+            // 1. Insertar el Pedido Cabecera
             int pedidoId = 0;
             try (PreparedStatement ps = conn.prepareStatement(sqlPedido, Statement.RETURN_GENERATED_KEYS)) {
-                ps.setString(1, pedido.getCliente().getDNI()); // Usamos DNI como FK del cliente
-                ps.setString(2, pedido.getEstado().toString());
-                ps.setDate(3, new java.sql.Date(pedido.getFechaPedido().getTime()));
-                ps.setInt(4, emprendimientoId);
-                ps.executeUpdate();
+                ps.setInt(1, emprendimientoId);
+                ps.setInt(2, pedido.getCliente().getId());
+                ps.setTimestamp(3, new Timestamp(pedido.getFechaPedido().getTime()));
+                ps.setString(4, pedido.getEstado().toString());
                 
+                // Calcular total para guardar en el registro
+                double total = 0;
+                if (pedido.getItems() != null) {
+                    total = pedido.getItems().stream()
+                            .mapToDouble(i -> i.getCantidad() * i.getPrecioUnitario())
+                            .sum();
+                }
+                ps.setDouble(5, total);
+                
+                ps.executeUpdate();
+
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) {
                         pedidoId = rs.getInt(1);
@@ -35,24 +49,26 @@ public class PedidoDAO {
                 }
             }
 
-            // 2. Guardar Items del Pedido
-            try (PreparedStatement psItem = conn.prepareStatement(sqlItems)) {
-                for (ItemPedido item : pedido.getItems()) {
-                    psItem.setInt(1, pedidoId);
-                    psItem.setInt(2, item.getProducto().getId());
-                    psItem.setInt(3, item.getCantidad());
-                    psItem.setDouble(4, item.getPrecioUnitario());
-                    psItem.addBatch(); // Agregamos al lote
+            // 2. Insertar los Items del Pedido
+            if (pedido.getItems() != null && !pedido.getItems().isEmpty()) {
+                try (PreparedStatement psItem = conn.prepareStatement(sqlItems)) {
+                    for (ItemPedido item : pedido.getItems()) {
+                        psItem.setInt(1, pedidoId);
+                        psItem.setInt(2, item.getProducto().getId());
+                        psItem.setInt(3, item.getCantidad());
+                        psItem.setDouble(4, item.getPrecioUnitario());
+                        psItem.addBatch(); // Añadir al lote
+                    }
+                    psItem.executeBatch(); // Ejecutar lote
                 }
-                psItem.executeBatch(); // Ejecutamos todo junto
             }
 
-            conn.commit(); // CONFIRMAR TRANSACCIÓN
-            
+            conn.commit(); // Confirmar cambios
+
         } catch (SQLException e) {
             if (conn != null) {
                 try {
-                    conn.rollback(); // DESHACER SI HAY ERROR
+                    conn.rollback(); // Revertir si hay error
                 } catch (SQLException ex) {
                     ex.printStackTrace();
                 }
@@ -60,12 +76,87 @@ public class PedidoDAO {
             throw e;
         } finally {
             if (conn != null) {
-                conn.setAutoCommit(true); // Restaurar estado por defecto
+                conn.setAutoCommit(true); // Restaurar estado
             }
         }
     }
+
+    public List<Pedido> listarPedidos(int emprendimientoId) throws SQLException {
+        List<Pedido> pedidos = new ArrayList<>();
+        // Se une con clientes para obtener nombre y con items para calcular total si es necesario
+        String sql = "SELECT p.id, p.fecha_pedido, p.estado, p.total, c.id as cliente_id, c.nombre, c.apellido, c.dni " +
+                     "FROM pedidos p " +
+                     "JOIN clientes c ON p.id_cliente = c.id " +
+                     "WHERE p.id_emprendimiento = ? ORDER BY p.fecha_pedido DESC";
+
+        try (Connection conn = ConnectionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            ps.setInt(1, emprendimientoId);
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                Pedido p = new Pedido();
+                p.setId(rs.getInt("id"));
+                p.setFechaPedido(rs.getTimestamp("fecha_pedido"));
+                
+                // Manejo seguro del Enum
+                try {
+                    p.setEstado(Estado.valueOf(rs.getString("estado").toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    p.setEstado(Estado.PENDIENTE); // Valor por defecto si falla
+                }
+                
+                // Reconstruir Cliente
+                Cliente c = new Cliente();
+                c.setId(rs.getInt("cliente_id"));
+                c.setNombre(rs.getString("nombre"));
+                c.setApellido(rs.getString("apellido")); // Si existe en query
+                c.setDNI(rs.getString("dni"));
+                p.setCliente(c);
+                
+                // Cargar Items del pedido (necesario para ver detalles)
+                p.setItems(listarItemsPorPedido(p.getId(), conn));
+
+                pedidos.add(p);
+            }
+        }
+        return pedidos;
+    }
+
+    private List<ItemPedido> listarItemsPorPedido(int pedidoId, Connection conn) throws SQLException {
+        List<ItemPedido> items = new ArrayList<>();
+        // JOIN con productos para obtener los datos necesarios para el objeto Producto
+        String sql = "SELECT i.id, i.cantidad, i.precio_unitario, p.id as prod_id, p.nombre, p.precio, p.stock " +
+                     "FROM items_pedido i " +
+                     "JOIN productos p ON i.producto_id = p.id " +
+                     "WHERE i.pedido_id = ?";
+                     
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, pedidoId);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                // Reconstruir el objeto Producto
+                Producto prod = new Producto();
+                prod.setId(rs.getInt("prod_id"));
+                prod.setNombre(rs.getString("nombre"));
+                prod.setPrecio(rs.getDouble("precio"));
+                prod.setStock(rs.getInt("stock"));
+
+                // Crear el ItemPedido usando tu constructor: (id, producto, cantidad, precioUnitario)
+                ItemPedido item = new ItemPedido(
+                    rs.getInt("id"),
+                    prod,
+                    rs.getInt("cantidad"),
+                    rs.getDouble("precio_unitario")
+                );
+                items.add(item);
+            }
+        }
+        return items;
+    }
     
-    // Método para cambiar estado (ej. de PENDIENTE a ENTREGADO)
+    // Método auxiliar para cambiar estado de un pedido
     public void actualizarEstado(int pedidoId, Estado nuevoEstado) throws SQLException {
         String sql = "UPDATE pedidos SET estado = ? WHERE id = ?";
         try (Connection conn = ConnectionDB.getConnection();

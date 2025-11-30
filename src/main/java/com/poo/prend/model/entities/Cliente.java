@@ -7,6 +7,8 @@ public class Cliente extends Persona{
     private int calificacion; 
     private List<Pedido> pedidos; 
     private List<Venta> ventas; 
+    
+    public Cliente(){}
 
     public Cliente(int calificacion, List<Pedido> pedidos, List<Venta> ventas) {
         this.calificacion = calificacion;
