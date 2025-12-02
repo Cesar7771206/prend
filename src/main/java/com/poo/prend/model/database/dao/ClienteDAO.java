@@ -23,7 +23,6 @@ public class ClienteDAO {
         }
     }
 
-    // --- NUEVO MÉTODO PARA EDITAR ---
     public void actualizarCliente(Cliente cliente) throws SQLException {
         String sql = "UPDATE clientes SET dni=?, nombre=?, apellido=?, numero_telefono=?, direccion=?, calificacion=? WHERE id=?";
         try (Connection conn = ConnectionDB.getConnection();

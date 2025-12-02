@@ -6,7 +6,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
-import java.awt.geom.Path2D;
+import java.awt.geom.Path2D; // Para la elaboración de las gráficas
 import java.util.ArrayList;
 import java.util.List;
 

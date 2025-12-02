@@ -5,21 +5,17 @@ import java.util.List;
 public class Emprendimiento {
     private int id; 
     private String nombre; 
-    // private String direccion; // ELIMINADO
     private String descripcion; 
     private List<Producto> inventario; 
     private List<Pedido> pedidos; 
     private List<Venta> ventas; 
     private List<Cliente> clientes; 
     
-    // Constructor simple
     public Emprendimiento(String nombre, String descripcion) {
         this.nombre = nombre;
-        // this.direccion = direccion; // ELIMINADO
         this.descripcion = descripcion; 
     }
 
-    // Constructor completo
     public Emprendimiento(String nombre, List<Producto> inventario, List<Pedido> pedidos, List<Venta> ventas, List<Cliente> clientes) {
         this.nombre = nombre;
         this.inventario = inventario;

@@ -85,12 +85,12 @@ public class MainController {
         dashboardView.btnSalir.addActionListener(e -> cerrarSesion());
 
         // --- ACCIONES INVENTARIO ---
-        dashboardView.btnAddProducto.addActionListener(e -> abrirDialogoProducto(null)); // null = Crear
+        dashboardView.btnAddProducto.addActionListener(e -> abrirDialogoProducto(null)); 
         dashboardView.btnEditProducto.addActionListener(e -> editarProductoSeleccionado());
         dashboardView.btnDelProducto.addActionListener(e -> eliminarProductoSeleccionado());
 
         // --- ACCIONES CLIENTES ---
-        dashboardView.btnAddCliente.addActionListener(e -> abrirDialogoCliente(null)); // null = Crear
+        dashboardView.btnAddCliente.addActionListener(e -> abrirDialogoCliente(null));
         dashboardView.btnEditCliente.addActionListener(e -> editarClienteSeleccionado());
         dashboardView.btnDelCliente.addActionListener(e -> eliminarClienteSeleccionado());
 
@@ -103,10 +103,8 @@ public class MainController {
         actualizarTitulosVisuales();
     }
     
-    // Método auxiliar para cambiar los títulos de las tarjetas en la vista sin editar el archivo View
     private void actualizarTitulosVisuales() {
         try {
-            // Cambiar "Ticket Promedio" -> "Cliente Top"
             Container parent1 = dashboardView.lblPromedioVenta.getParent();
             for(Component c : parent1.getComponents()) {
                 if(c instanceof JLabel) {
@@ -114,7 +112,6 @@ public class MainController {
                     if(l.getText().contains("Ticket") || l.getText().contains("Promedio")) l.setText("Cliente Top");
                 }
             }
-            // Cambiar "Producto Estrella" -> "Más Vendido"
             Container parent2 = dashboardView.lblProductoMasVendido.getParent();
             for(Component c : parent2.getComponents()) {
                 if(c instanceof JLabel) {
@@ -130,7 +127,6 @@ public class MainController {
     // ==========================================
 
     private void abrirDialogoNuevoPedido() {
-        // Diálogo simplificado para crear PEDIDO PENDIENTE
         JDialog dialog = new JDialog(mainFrame, "Nuevo Pedido", true);
         dialog.setSize(400, 350);
         dialog.setLayout(new BorderLayout());
@@ -255,7 +251,7 @@ public class MainController {
 
         try {
             // Buscar producto original (simplificado: iteramos lista o traemos de BD)
-            // Para ser robustos, buscamos en BD (reusamos lógica de lista filtrada)
+            // Además, para ser robustos, buscamos en BD (reusamos lógica de lista filtrada)
             Producto p = productoDAO.listarPorEmprendimiento(usuarioLogueado.getEmprendimiento().getId())
                         .stream().filter(prod -> prod.getId() == id).findFirst().orElse(null);
             

@@ -1,5 +1,7 @@
 package com.poo.prend.view;
 
+// Este archivo permite el uso de componentes modernos (Ya que no me dejo usar FX :c)
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;

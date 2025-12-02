@@ -15,7 +15,7 @@ public class EmprendimientoDAO {
             ps.setInt(1, usuarioId);
             ps.setString(2, emp.getNombre());
             ps.setString(3, emp.getDescripcion());
-            ps.setString(4, "General"); // Valor por defecto o agrega un campo en tu formulario
+            ps.setString(4, "General"); 
 
             ps.executeUpdate();
 
@@ -43,7 +43,6 @@ public class EmprendimientoDAO {
                         rs.getString("descripcion")
                     );
                     emp.setId(rs.getInt("id"));
-                    // Si tu objeto Emprendimiento tiene más campos, setéalos aquí
                 }
             }
         }

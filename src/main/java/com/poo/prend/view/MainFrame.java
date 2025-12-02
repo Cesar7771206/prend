@@ -9,11 +9,11 @@ public class MainFrame extends JFrame {
 
     public MainFrame() {
         setTitle("PREND - Sistema de Gestión");
-        setSize(1000, 700); // Un poco más grande para el diseño moderno
+        setSize(1000, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         
-        // Icono de la ventana (Opcional, dibuja una P simple si no hay imagen)
+        
         setIconImage(crearIconoApp());
 
         cardLayout = new CardLayout();
@@ -26,7 +26,7 @@ public class MainFrame extends JFrame {
         cardLayout.show(cardPanel, nombre);
     }
     
-    // Generar un icono simple en código
+    // Generar el icono
     private Image crearIconoApp() {
         java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(64, 64, java.awt.image.BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2 = image.createGraphics();

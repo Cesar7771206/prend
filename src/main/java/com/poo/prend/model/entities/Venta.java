@@ -1,10 +1,9 @@
 package com.poo.prend.model.entities;
 
 import com.poo.prend.model.enums.MetodoPago;
-import com.poo.prend.model.enums.Estado;
-import java.util.*; 
+import java.util.*;
 
-public class Venta extends Pedido{
+public class Venta extends Pedido {
     private MetodoPago metodoPago;
     private Date fechaVenta;
 
@@ -16,7 +15,7 @@ public class Venta extends Pedido{
         this.metodoPago = metodoPago;
         this.fechaVenta = fechaVenta;
     }
-    
+
     public MetodoPago getMetodoPago() {
         return metodoPago;
     }

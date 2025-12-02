@@ -10,7 +10,6 @@ import java.util.List;
 public class ProductoDAO {
 
     public void guardarProducto(Producto prod, int emprendimientoId) throws SQLException {
-        // CORRECCIÓN: Nombre de columna 'id_emprendimiento'
         String sql = "INSERT INTO productos (nombre, descripcion, precio, stock, categoria, id_emprendimiento) VALUES (?, ?, ?, ?, ?, ?)";
         
         try (Connection conn = ConnectionDB.getConnection();
@@ -59,7 +58,6 @@ public class ProductoDAO {
         return lista;
     }
     
-    // Método solicitado por el MainController para actualizar el producto completo
     public void actualizarProducto(Producto prod) throws SQLException {
         String sql = "UPDATE productos SET nombre=?, descripcion=?, precio=?, stock=?, categoria=? WHERE id=?";
         
@@ -77,7 +75,6 @@ public class ProductoDAO {
         }
     }
     
-    // Método específico para actualizar solo stock (opcional, pero útil)
     public void actualizarStock(int idProducto, int nuevoStock) throws SQLException {
         String sql = "UPDATE productos SET stock = ? WHERE id = ?";
         try (Connection conn = ConnectionDB.getConnection();

@@ -10,7 +10,7 @@ public class LoginViewModern extends JPanel {
     public JButton btnIrARegistro;
 
     public LoginViewModern() {
-        setLayout(new GridLayout(1, 2)); // División 50% - 50%
+        setLayout(new GridLayout(1, 2)); 
 
         // --- PANEL IZQUIERDO (Arte Visual) ---
         JPanel leftPanel = new JPanel() {

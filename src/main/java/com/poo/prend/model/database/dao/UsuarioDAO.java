@@ -7,7 +7,6 @@ import java.sql.*;
 public class UsuarioDAO {
 
     public void crearUsuario(Usuario usuario) throws SQLException {
-        // CORRECCIÓN: Nombres de columnas coinciden con schema.sql
         String sql = "INSERT INTO usuarios (dni, nombre, apellido, edad, numero_telefono, direccion, correo, contrasena) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         
         try (Connection conn = ConnectionDB.getConnection();
@@ -17,7 +16,7 @@ public class UsuarioDAO {
             ps.setString(2, usuario.getNombre());
             ps.setString(3, usuario.getApellido());
             ps.setInt(4, usuario.getEdad());
-            ps.setString(5, usuario.getNumero()); // Entidad usa getNumero, BD usa numero_telefono
+            ps.setString(5, usuario.getNumero()); 
             ps.setString(6, usuario.getDireccion());
             ps.setString(7, usuario.getCorreo());
             ps.setString(8, usuario.getContraseña());
@@ -50,7 +49,6 @@ public class UsuarioDAO {
             
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    // Constructor: id, correo, password, emprendimiento (null por ahora)
                     usuario = new Usuario(
                         rs.getInt("id"),
                         rs.getString("correo"),
@@ -58,7 +56,6 @@ public class UsuarioDAO {
                         null 
                     );
                     
-                    // Setters de Persona
                     usuario.setDNI(rs.getString("dni"));
                     usuario.setNombre(rs.getString("nombre"));
                     usuario.setApellido(rs.getString("apellido"));
